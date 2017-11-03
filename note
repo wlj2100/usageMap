@@ -1,0 +1,24 @@
+colHeads =  ['sessionid','cookieid','session_pid','timestamp','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
+
+line_event_schema = ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign']
+
+
+sessionid, cookieid is for record
+line_event is for page views
+
+customer seq is a company
+contact seq is person under customer(company)
+
+different level of product description
+web EDC list
+web PGM list
+web class list
+web type list
+
+sample data dict list:
+37 col
+499 companies
+661 account
+4858 cookie (could be 4858 terminal)
+29114 session
+29239 records
