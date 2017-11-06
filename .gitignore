@@ -1,2 +1,5 @@
-Column_header.txt liangji_dot_com_500_custD.txt line_event_schema.txt
+Column_header.txt 
+liangji_dot_com_500_custD.txt 
+line_event_schema.txt
 new_data
+*.txt
