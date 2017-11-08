@@ -7,12 +7,17 @@ import time
 import datetime
 
 def parse(verbose=False):
-    colHeads =  ['sessionid','cookieid','session_pid','timestamp','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
+    # colHeads =  ['sessionid','cookieid','session_pid','timestamp','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
+    # line_event_schema = ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign']
 
-    line_event_schema = ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign']
+    colHeads = ['sessionid','cookieid','session_pid','firsttimestamp','firstreferringurl','firstdestinationurl','firstreferraltype','timestamp','referralname','referralurl','referraltype','referralsource','city','state','country','dma','secondleveldomain','browsertype','javascriptversion','language','screenresolution','operatingsystemname','mobilenetwork','mobiledevice','devicetype','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_num_elements','num_product','num_search','num_shop','num_account_center','num_homepage','num_solutions_and_services','num_hubs','num_custom_platinum_pages','num_brands','num_other','num_pdf','num_video','num_other_media_library_digital_assets','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
+
+
+    line_event_schema = ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign','page_referral_source','search_keyword','ip']
     # read, extract, generate and compare
     data  = []
-    with open('liangji_dot_com_500_custD.txt','r') as f:
+    # with open('liangji_dot_com_500_custD.txt','r') as f:
+    with open('./new_data/full_sample_for_liangji_500D.txt','r') as f:
         count = 0
         for line in f:
             count += 1
@@ -36,7 +41,6 @@ def parse(verbose=False):
                 line_event = line_event.split(',')
                 # print line_event
                 # print len(line_event)
-                # print line_event
                 # print len(line_event_schema)
                 for j in range(len(line_event)):
                     # print line_event_schema[j], line_event[j]
@@ -77,12 +81,14 @@ usage = {}
 
 class UsageMap():
     """docstring for usageMap."""
-    dataMap = {}
-    customerMap = {}
-    contactMap = {}
+    # dataMap = {}
+    # customerMap = {}
+    # contactMap = {}
 
     def __init__(self):
-        pass
+        self.dataMap = {}
+        self.customerMap = {}
+        self.contactMap = {}
 
 
     def getDataMap(self, data, oldMap=None, startDate=None, endDate=None, verbose=False):
@@ -230,7 +236,9 @@ if __name__ == '__main__':
     obj.initUsageMap()
     obj.dataMap.keys()[0]
     obj.getCustomerUsage(obj.dataMap.keys()[0])
-    print np.sum([item for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
+    obj.customerMap[obj.dataMap.keys()[0]]['class_focus']
+    print np.sum([item[1][0] for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
+
     obj.contactMap['20330908']['12385906']
     # sorted(obj.contactMap['20330908']['12385906']['class_focus'].items(), key=lambda x: x[1], reverse=True)
 
