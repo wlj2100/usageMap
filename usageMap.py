@@ -34,7 +34,7 @@ class UsageMap():
 
 
     def getDataMap(self, data, oldMap=None, startDate=None, endDate=None, verbose=False):
-        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country']
+        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma']
 
         dataMap = {}
         if oldMap != None:
@@ -101,13 +101,13 @@ class UsageMap():
                 'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
                 temps = self.contactNumAnalysis(dataMap[customer][contact], NUM_ITEMS)
                 for i in range(len(NUM_ITEMS)):
-                    contactMap[customer][contact][NUM_ITEMS[i] + '_Analysis'] = temps[i]
+                    contactMap[customer][contact][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
 
                 # for string attribute
-                STR_ITEMS = ['web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
+                STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
                 temps = self.contactStrAnalysis(dataMap[customer][contact], STR_ITEMS)
                 for i in range(len(STR_ITEMS)):
-                    contactMap[customer][contact][STR_ITEMS[i] + '_Analysis'] = temps[i]
+                    contactMap[customer][contact][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
             # temp = {}
             # countSum = len(customerMap[customer]['class_focus'])
             # for cls in customerMap[customer]['class_focus']:
