@@ -1,69 +1,9 @@
-import re
 import pandas as pd
 import json
 import numpy as np
-# import operator
 import time
 import datetime
-
-def parse(verbose=False):
-    # colHeads =  ['sessionid','cookieid','session_pid','timestamp','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
-    # line_event_schema = ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign']
-
-    colHeads = ['sessionid','cookieid','session_pid','firsttimestamp','firstreferringurl','firstdestinationurl','firstreferraltype','timestamp','referralname','referralurl','referraltype','referralsource','city','state','country','dma','secondleveldomain','browsertype','javascriptversion','language','screenresolution','operatingsystemname','mobilenetwork','mobiledevice','devicetype','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_num_elements','num_product','num_search','num_shop','num_account_center','num_homepage','num_solutions_and_services','num_hubs','num_custom_platinum_pages','num_brands','num_other','num_pdf','num_video','num_other_media_library_digital_assets','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
-
-
-    line_event_schema = ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign','page_referral_source','search_keyword','ip']
-    # read, extract, generate and compare
-    data  = []
-    # with open('liangji_dot_com_500_custD.txt','r') as f:
-    with open('./new_data/full_sample_for_liangji_500D.txt','r') as f:
-        count = 0
-        for line in f:
-            count += 1
-            temp = {}
-            contents = line.split('\t')
-            # for content in contents:
-            #     print content
-            for i in range(len(colHeads)):
-                temp[colHeads[i]] = contents[i].strip()
-            # deal with line_event
-            line_events = temp['line_event'][1: -1].split('),(')
-            temp['line_events'] = []
-            for i in range(len(line_events)):
-                temp2 = {}
-                line_event = line_events[i]
-                # print line_events[i]
-                if i == 0:
-                    line_event = line_event[1:]
-                if len(line_event) > 1 and i == len(line_events) - 1:
-                    line_event = line_event[:-1]
-                line_event = line_event.split(',')
-                # print line_event
-                # print len(line_event)
-                # print len(line_event_schema)
-                for j in range(len(line_event)):
-                    # print line_event_schema[j], line_event[j]
-                    temp2[line_event_schema[j]] = line_event[j]
-                # print temp2
-                temp['line_events'].append(temp2)
-            # deal with web_xxxlist
-            temp['web_EDC_list'] = [x for x in temp['web_EDC_list'].strip().split(',') if x != '']
-            temp['web_EDC_amount'] = len(temp['web_EDC_list'])
-            temp['web_PGM_list'] = [x for x in temp['web_PGM_list'].strip().split(',') if x != '']
-            temp['web_PGM_amount'] = len(temp['web_PGM_list'])
-            temp['web_Class_list'] = [x for x in temp['web_Class_list'].strip().split(',') if x != '']
-            temp['web_Class_amount'] = len(temp['web_Class_list'])
-            temp['web_type_list'] = [x for x in temp['web_type_list'].strip().split(',') if x != '']
-            temp['web_type_amount'] = len(temp['web_type_list'])
-            # print temp['web_PGM_list']
-
-            data.append(temp)
-            # if count > 10:
-            #     break
-    return data
-
-
+from collections import Counter
 '''
 dataMap = {customerseq: {contactseq: {sessionid: record{key: value}}}}
 
@@ -78,6 +18,8 @@ accountMap = {customerseq: {contactseq: usage}}
 usage = {}
 
 '''
+
+
 
 class UsageMap():
     """docstring for usageMap."""
@@ -122,17 +64,7 @@ class UsageMap():
             else:
                 duplicate.append(item)
         self.dataMap = dataMap
-        # print 'company', len(usageMap)
-        # print 'account', sum([len(usageMap[company]) for company in usageMap])
-        # # print [key for key in usageMap]
-        # print 'seesion', sum([len(usageMap[company][account]) for company in usageMap for account in usageMap[company]])
-        # print 'data record', len(data)
-        # # not match due to duplicate session
-        # print 'duplicate', len(duplicate)
-        # # print usageMap.keys()
-        # print len(usageMap.keys())
-        # # 20330908
-        # print len(usageMap['20330908'])
+
     def initUsageMap(self):
         # init data structure
         dataMap = self.dataMap
@@ -159,10 +91,23 @@ class UsageMap():
                         validSession += 1
                 contactMap[customer][contact]['contact_type'] = self.accountUsage(validSession, len(dataMap[customer][contact]))
                 contactMap[customer][contact]['class_focus'] = self.get_focus(contactMap[customer][contact]['class_focus'])
-                ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
-                temps = self.contactNumAnalysis(dataMap[customer][contact], ITEMS)
-                for i in range(len(ITEMS)):
-                    contactMap[customer][contact][ITEMS[i] + '_Analysis'] = temps[i]
+
+
+                # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
+                # for numeric attribute
+                NUM_ITEMS = ['label',
+                'total_num_pages',
+                'total_session_time',
+                'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
+                temps = self.contactNumAnalysis(dataMap[customer][contact], NUM_ITEMS)
+                for i in range(len(NUM_ITEMS)):
+                    contactMap[customer][contact][NUM_ITEMS[i] + '_Analysis'] = temps[i]
+
+                # for string attribute
+                STR_ITEMS = ['web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
+                temps = self.contactStrAnalysis(dataMap[customer][contact], STR_ITEMS)
+                for i in range(len(STR_ITEMS)):
+                    contactMap[customer][contact][STR_ITEMS[i] + '_Analysis'] = temps[i]
             # temp = {}
             # countSum = len(customerMap[customer]['class_focus'])
             # for cls in customerMap[customer]['class_focus']:
@@ -175,7 +120,52 @@ class UsageMap():
         self.customerMap = customerMap
         self.contactMap = contactMap
 
-    def contactNumAnalysis(self, dataMapDict, ITEMS, bins=5, density=True):
+    def contactNumAnalysis(self, dataMapDict, ITEMS, bins='auto', density=False):
+        temps = []
+        for i in range(len(ITEMS)):
+            temps.append([])
+        for session in dataMapDict:
+            for i in range(len(ITEMS)):
+                ITEM = ITEMS[i]
+                if type(dataMapDict[session][ITEM]) is list:
+                    # temps[i] += (dataMapDict[session][ITEM])
+                    temps[i].append(len(dataMapDict[session][ITEM]))
+                else:
+                    if type(dataMapDict[session][ITEM]) is str:
+                        if len(dataMapDict[session][ITEM]) is 0:
+                            dataMapDict[session][ITEM] = 0
+                        try:
+                            dataMapDict[session][ITEM] = float(dataMapDict[session][ITEM])
+                        except Exception as e:
+                            print ITEM, dataMapDict[session][ITEM]
+                            raise
+
+                    temps[i].append(dataMapDict[session][ITEM])
+        # temp = [dataMapDict[session][ITEM] for session in dataMapDict]
+
+        for i in range(len(ITEMS)):
+            try:
+                hist, edges = np.histogram(temps[i], bins=bins, density=density)
+                total = np.sum(hist)
+                percentage = 0
+                if total > 0:
+                    percentage = hist.astype(float) / float(total)
+                temps[i] = {
+                'hist': hist,
+                'percentage': percentage,
+                'edges': edges,
+                'total': total
+                }
+            except Exception as e:
+                print ITEMS[i] + ' fails parse'
+                print temps[i]
+                temps[i] = {}
+
+        # return np.histogram(temp, bin=5)
+        return temps
+        pass
+
+    def contactStrAnalysis(self, dataMapDict, ITEMS):
         temps = []
         for i in range(len(ITEMS)):
             temps.append([])
@@ -190,11 +180,28 @@ class UsageMap():
 
         for i in range(len(ITEMS)):
             try:
-                temps[i] = np.histogram(temps[i], bins=bins, density=density)
+                temps[i] = Counter(temps[i])
+                total = np.sum(temps[i].values())
+                keys = temps[i].keys()
+                hist = np.array(temps[i].values())
+                percentage = 0
+                # error here
+                if total > 0:
+                    percentage = hist.astype(float) / float(total)
+                temps[i] = {
+                'hist': hist,
+                'percentage': percentage,
+                'key': keys,
+                'total': total
+                }
             except Exception as e:
                 print ITEMS[i] + ' fails parse'
                 print temps[i]
-                temps[i] = []
+                print percentage
+                print hist
+                print total
+                temps[i] = {}
+                raise
 
         # return np.histogram(temp, bin=5)
         return temps
@@ -258,93 +265,3 @@ class UsageMap():
 
     def getContactMap(self):
         return self.contactMap
-
-if __name__ == '__main__':
-    data = parse()
-    obj = UsageMap()
-    obj.getDataMap(data)
-    obj.initUsageMap()
-    obj.dataMap.keys()[0]
-    obj.getCustomerUsage(obj.dataMap.keys()[0])
-    obj.customerMap[obj.dataMap.keys()[0]]['class_focus']
-    print np.sum([item[1][0] for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
-
-    obj.contactMap['20330908']['12385906']
-    type(obj.dataMap['20330908']['12385906'])
-
-
-    pass
-
-
-
-
-
-
-
-
-    # sorted(obj.contactMap['20330908']['12385906']['class_focus'].items(), key=lambda x: x[1], reverse=True)
-
-
-
-# def extend(usageMap):
-#     for company in usageMap:
-#         for account in usageMap[company]:
-#             sessionDict = usageMap[company][account]
-#             # get session count, class exist count
-#             for
-
-
-
-# class Customer():
-#     """docstring for Company."""
-#     contacts = {}
-#     companyDetail = {}
-#     def __init__(self):
-#         pass
-#
-# class Contact:
-#     sessions = {}
-#     accountDetail = {}
-#     def __init__(self):
-#         pass
-#
-# def parseDataToClass(data):
-#     recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events']
-#     data = parse()
-#     usageMap = {}
-#     duplicate = []
-#     for item in data:
-#         if item['customerseq'] not in usageMap:
-#             usageMap[item['customerseq']] = Customer()
-#         # type(usageMap[item['customerseq']].contacts)
-#         if item['contactseq'] not in usageMap[item['customerseq']].contacts:
-#             usageMap[item['customerseq']].contacts[item['contactseq']] = Contact()
-#         # type(usageMap[item['customerseq']].contacts[item['contactseq']].sessions)
-#         record = {}
-#         for key in recordKeys:
-#             record[key] = item[key]
-#         if item['sessionid'] in usageMap[item['customerseq']].contacts[item['contactseq']].sessions:
-#             print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
-#             duplicate.append(item)
-#         elif item['sessionid'] != '' and item['sessionid'] not in usageMap[item['customerseq']].contacts[item['contactseq']].sessions:
-#             usageMap[item['customerseq']].contacts[item['contactseq']].sessions[item['sessionid']] = record
-#         else:
-#             duplicate.append(item)
-#     print 'company', len(usageMap)
-#     print 'account', sum([len(usageMap[company].contacts) for company in usageMap])
-#     # print [key for key in usageMap]
-#     print 'seesion', sum([len(usageMap[company].contacts[account].sessions) for company in usageMap for account in usageMap[company].contacts])
-#     print 'data record', len(data)
-#     # not match due to duplicate session
-#     print 'duplicate', len(duplicate)
-#     # print usageMap.keys()
-#     print len(usageMap.keys())
-#     # 20330908
-#     print len(usageMap['20330908'].contacts)
-#     return usageMap
-
-
-test = [i for i in range(100)]
-len(np.histogram(test)[0])
-len(np.histogram(test)[1])
-np.histogram(test, bins=5)

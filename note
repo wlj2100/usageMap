@@ -22,3 +22,11 @@ sample data dict list:
 4858 cookie (could be 4858 terminal)
 29114 session
 29239 records
+
+
+
+attribution is num with str format:
+label
+total_num_pages
+total_session_time
+referal
