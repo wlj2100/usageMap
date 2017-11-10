@@ -68,7 +68,7 @@ def parse(verbose=False):
 dataMap = {customerseq: {contactseq: {sessionid: record{key: value}}}}
 
 record keys:
-['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events']
+['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','city','state','country','num_product','num_search']
 
 line_event keys:
 ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign']
@@ -92,7 +92,7 @@ class UsageMap():
 
 
     def getDataMap(self, data, oldMap=None, startDate=None, endDate=None, verbose=False):
-        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events']
+        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country']
 
         dataMap = {}
         if oldMap != None:
@@ -144,9 +144,10 @@ class UsageMap():
 
             customerMap[customer]['class_focus'] = []
             for contact in dataMap[customer]:
-
                 contactMap[customer][contact] = {}
                 contactMap[customer][contact]['class_focus'] = []
+                contactMap[customer][contact]['number_session'] = len(dataMap[customer][contact])
+
                 validSession = 0
                 for session in dataMap[customer][contact]:
                     record = dataMap[customer][contact][session]
@@ -158,6 +159,10 @@ class UsageMap():
                         validSession += 1
                 contactMap[customer][contact]['contact_type'] = self.accountUsage(validSession, len(dataMap[customer][contact]))
                 contactMap[customer][contact]['class_focus'] = self.get_focus(contactMap[customer][contact]['class_focus'])
+                ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
+                temps = self.contactNumAnalysis(dataMap[customer][contact], ITEMS)
+                for i in range(len(ITEMS)):
+                    contactMap[customer][contact][ITEMS[i] + '_Analysis'] = temps[i]
             # temp = {}
             # countSum = len(customerMap[customer]['class_focus'])
             # for cls in customerMap[customer]['class_focus']:
@@ -169,6 +174,31 @@ class UsageMap():
             customerMap[customer]['class_focus'] = self.get_focus(customerMap[customer]['class_focus'])
         self.customerMap = customerMap
         self.contactMap = contactMap
+
+    def contactNumAnalysis(self, dataMapDict, ITEMS, bins=5, density=True):
+        temps = []
+        for i in range(len(ITEMS)):
+            temps.append([])
+        for session in dataMapDict:
+            for i in range(len(ITEMS)):
+                ITEM = ITEMS[i]
+                if type(dataMapDict[session][ITEM]) is list:
+                    temps[i] += (dataMapDict[session][ITEM])
+                else:
+                    temps[i].append(dataMapDict[session][ITEM])
+        # temp = [dataMapDict[session][ITEM] for session in dataMapDict]
+
+        for i in range(len(ITEMS)):
+            try:
+                temps[i] = np.histogram(temps[i], bins=bins, density=density)
+            except Exception as e:
+                print ITEMS[i] + ' fails parse'
+                print temps[i]
+                temps[i] = []
+
+        # return np.histogram(temp, bin=5)
+        return temps
+        pass
 
     def timeConvert(self, s):
         return str(int(time.mktime(datetime.datetime.strptime(s, "%d/%m/%Y").timetuple())))
@@ -240,6 +270,18 @@ if __name__ == '__main__':
     print np.sum([item[1][0] for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
 
     obj.contactMap['20330908']['12385906']
+    type(obj.dataMap['20330908']['12385906'])
+
+
+    pass
+
+
+
+
+
+
+
+
     # sorted(obj.contactMap['20330908']['12385906']['class_focus'].items(), key=lambda x: x[1], reverse=True)
 
 
@@ -300,3 +342,9 @@ if __name__ == '__main__':
 #     # 20330908
 #     print len(usageMap['20330908'].contacts)
 #     return usageMap
+
+
+test = [i for i in range(100)]
+len(np.histogram(test)[0])
+len(np.histogram(test)[1])
+np.histogram(test, bins=5)
