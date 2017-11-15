@@ -30,3 +30,19 @@ label
 total_num_pages
 total_session_time
 referal
+
+
+
+
+1 change contactseq to eaccount
+2 add class activity for today, last week, last dual-week, last month, whole type period
+
+3. platform: mobile, desktop
+4. category: product, account center, carts?, checkout
+
+5. test update datamap function
+6. test customer/contack map generation (regenerate after datamap update)
+7. add query function for time interval
+
+8 convert customer&contact map to json
+9. delete old datamap of time interval

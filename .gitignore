@@ -4,3 +4,4 @@ line_event_schema.txt
 new_data
 *.txt
 *.pyc
+*.json

@@ -74,10 +74,13 @@ if __name__ == '__main__':
     # obj.getCustomerUsage(obj.dataMap.keys()[0])
     # obj.customerMap[obj.dataMap.keys()[0]]['class_focus']
     # print np.sum([item[1][0] for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
-
-    for key in obj.contactMap['20330908']['12385906']:
-        print key
-        print obj.contactMap['20330908']['12385906'][key]
+    # print obj.dataMap['20330908']['12385906']
+    with open('dataMap.json', 'w') as f:
+        json.dump(obj.dataMap, f)
+    # for key in obj.contactMap['20330908']['12385906']:
+    #     print 'key:', key
+    #     print obj.contactMap['20330908']['12385906'][key]
+    #     print ''
     # type(obj.dataMap['20330908']['12385906'])
     # obj.contactMap['20330908']['12385906']['label_Analysis']['edges']
     # obj.dataMap['20330908']['12385906'].keys()
