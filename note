@@ -46,3 +46,11 @@ referal
 
 8 convert customer&contact map to json
 9. delete old datamap of time interval
+
+
+customerseq:
+(eaccountuserseq or cmusertrackingkey)
+
+metric: information entrophy
+
+time of day: use zip to figure out time zone
