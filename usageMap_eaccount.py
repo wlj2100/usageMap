@@ -34,7 +34,7 @@ class UsageMap():
 
 
     def getDataMap(self, data, oldMap=None, startDate=None, endDate=None, verbose=False):
-        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma']
+        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq']
 
         dataMap = {}
         if oldMap != None:
@@ -44,15 +44,15 @@ class UsageMap():
         for item in data:
             if item['customerseq'] not in dataMap:
                 dataMap[item['customerseq']] = {}
-            if item['contactseq'] not in dataMap[item['customerseq']]:
-                dataMap[item['customerseq']][item['contactseq']] = {}
+            if item['eaccountuserseq'] not in dataMap[item['eaccountuserseq']]:
+                dataMap[item['customerseq']][item['eaccountuserseq']] = {}
             record = {}
             for key in recordKeys:
                 record[key] = item[key]
-            if item['sessionid'] in dataMap[item['customerseq']][item['contactseq']]:
-                # print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
+            if item['sessionid'] in dataMap[item['customerseq']][item['eaccountuserseq']]:
+                print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
                 duplicate.append(item)
-            elif item['sessionid'] != '' and item['sessionid'] not in dataMap[item['customerseq']][item['contactseq']]:
+            elif item['sessionid'] != '' and item['sessionid'] not in dataMap[item['customerseq']][item['eaccountuserseq']]:
                 # check date
                 if startDate != None:
                     if timeConvert(record['timestamp']) < startDate:
@@ -60,35 +60,27 @@ class UsageMap():
                 if endDate != None:
                     if timeConvert(record['timestamp']) > endDate:
                         continue
-                dataMap[item['customerseq']][item['contactseq']][item['sessionid']] = record
+                dataMap[item['customerseq']][item['eaccountuserseq']][item['sessionid']] = record
             else:
                 duplicate.append(item)
         self.dataMap = dataMap
 
-    def initUsageMap(self):
+    def initUsageMap(self, startDate=None):
         # init data structure
         dataMap = self.dataMap
-        customerMap = {}
-        contactMap = {}
+        eaccountMap = {}
+        # init eaccountMap
         for customer in dataMap:
-            customerMap[customer] = {}
-            contactMap[customer] = {}
+            eaccountMap[customer] = {}
+            # get eaccount
+            for eaccount in dataMap[customer]:
+                eaccountMap[customer][eaccount] = {}
+                eaccountMap[customer][eaccount]['number_session'] = len(dataMap[customer][eaccount])
 
-            customerMap[customer]['class_focus'] = []
-            for contact in dataMap[customer]:
-                contactMap[customer][contact] = {}
-                contactMap[customer][contact]['class_focus'] = []
-                contactMap[customer][contact]['number_session'] = len(dataMap[customer][contact])
+                for session in dataMap[customer][eaccount]:
+                    record = dataMap[customer][eaccount][session]
 
-                validSession = 0
-                for session in dataMap[customer][contact]:
-                    record = dataMap[customer][contact][session]
-                    # for contact level:
-                    contactMap[customer][contact]['class_focus'] += record['web_Class_list']
-                    # for customer level: remove dup by list(set())
-                    customerMap[customer]['class_focus'] += list(set(record['web_Class_list']))
-                    if len(record['web_Class_list']) > 0:
-                        validSession += 1
+
                 contactMap[customer][contact]['contact_type'] = self.accountUsage(validSession, len(dataMap[customer][contact]))
                 contactMap[customer][contact]['class_focus'] = self.get_focus(contactMap[customer][contact]['class_focus'])
 
@@ -108,14 +100,7 @@ class UsageMap():
                 temps = self.contactStrAnalysis(dataMap[customer][contact], STR_ITEMS)
                 for i in range(len(STR_ITEMS)):
                     contactMap[customer][contact][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
-            # temp = {}
-            # countSum = len(customerMap[customer]['class_focus'])
-            # for cls in customerMap[customer]['class_focus']:
-            #     if cls not in temp:
-            #         temp[cls] = 0
-            #     temp[cls] += 1
-            # for key in temp:
-            #     temp[key] = (temp[key], self.classFocus(temp[key], countSum))
+
             customerMap[customer]['class_focus'] = self.get_focus(customerMap[customer]['class_focus'])
         self.customerMap = customerMap
         self.contactMap = contactMap
@@ -210,18 +195,6 @@ class UsageMap():
     def timeConvert(self, s):
         return str(int(time.mktime(datetime.datetime.strptime(s, "%d/%m/%Y").timetuple())))
 
-    def get_focus(self, lst):
-        temp = {}
-        countSum = len(lst)
-        for cls in lst:
-            if cls not in temp:
-                temp[cls] = 0
-            temp[cls] += 1
-        for key in temp:
-            temp[key] = (temp[key], self.classFocus(temp[key], countSum))
-
-        return sorted(temp.items(), key=lambda x: x[1], reverse=True)
-
 
     def getCustomerUsage(self, customerseq):
         if customerseq in self.customerMap:
@@ -238,27 +211,6 @@ class UsageMap():
         else:
             print 'customerseq not exist'
 
-    def accountUsage(self, validCount, sessionCount):
-        if sessionCount < 3:
-            return 'ignore'
-        if validCount / (sessionCount + 0.0) <= 0.1:
-            return 'manage'
-        if validCount / (sessionCount + 0.0) >= 0.6:
-            return 'look'
-        return 'mix'
-
-    def classFocus(self, count, countSum):
-        if count < 5:
-            return 'ignore'
-        if count / (countSum + 0.0) >= .5:
-            return 'focus'
-        if countSum > 25 and count / (countSum + 0.0) >= .4:
-            return 'focus'
-        if countSum > 50 and count / (countSum + 0.0) >= .25:
-            return 'focus'
-        if countSum > 200 and count / (countSum + 0.0) >= .2:
-            return 'focus'
-        return 'ignore'
 
     def getCustomerMap(self):
         return self.customerMap
