@@ -5,7 +5,7 @@ import time
 import datetime
 from collections import Counter
 '''
-dataMap = {customerseq: {contactseq: {sessionid: record{key: value}}}}
+dataMap = {customerseq: {eaccountseq: {sessionid: record{key: value}}}}
 
 record keys:
 ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','city','state','country','num_product','num_search']
@@ -14,7 +14,7 @@ line_event keys:
 ['flag','index','date_time','event_duration','pagename','pageid','contentcategory','contentcategoryid','contentcategorytop','pageurl','searchresultscount','attribute7','itemcode','itemseq','branddescription','itemtypecode','itemclasscode','itemgroupmajorcode','manufacturercode','elementname','elementcategory','horiz_campaign','horiz_theme','sw_mgmt_campaign']
 
 companyMap = {customerseq: usage}}
-accountMap = {customerseq: {contactseq: usage}}
+accountMap = {customerseq: {eaccountseq: usage}}
 usage = {}
 
 '''
@@ -23,18 +23,14 @@ usage = {}
 
 class UsageMap():
     """docstring for usageMap."""
-    # dataMap = {}
-    # customerMap = {}
-    # contactMap = {}
 
     def __init__(self):
         self.dataMap = {}
-        self.customerMap = {}
-        self.contactMap = {}
+        self.eaccountMap = {}
 
 
     def getDataMap(self, data, oldMap=None, startDate=None, endDate=None, verbose=False):
-        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq']
+        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq','contactseq']
 
         dataMap = {}
         if oldMap != None:
@@ -44,11 +40,14 @@ class UsageMap():
         for item in data:
             if item['customerseq'] not in dataMap:
                 dataMap[item['customerseq']] = {}
-            if item['eaccountuserseq'] not in dataMap[item['eaccountuserseq']]:
+            if item['eaccountuserseq'] not in dataMap[item['customerseq']]:
                 dataMap[item['customerseq']][item['eaccountuserseq']] = {}
+            '''
             record = {}
             for key in recordKeys:
                 record[key] = item[key]
+            '''
+            record = item
             if item['sessionid'] in dataMap[item['customerseq']][item['eaccountuserseq']]:
                 print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
                 duplicate.append(item)
@@ -80,32 +79,25 @@ class UsageMap():
                 for session in dataMap[customer][eaccount]:
                     record = dataMap[customer][eaccount][session]
 
-
-                contactMap[customer][contact]['contact_type'] = self.accountUsage(validSession, len(dataMap[customer][contact]))
-                contactMap[customer][contact]['class_focus'] = self.get_focus(contactMap[customer][contact]['class_focus'])
-
-
                 # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
                 # for numeric attribute
                 NUM_ITEMS = ['label',
                 'total_num_pages',
                 'total_session_time',
                 'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
-                temps = self.contactNumAnalysis(dataMap[customer][contact], NUM_ITEMS)
+                temps = self.eaccountNumAnalysis(dataMap[customer][eaccount], NUM_ITEMS)
                 for i in range(len(NUM_ITEMS)):
-                    contactMap[customer][contact][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
+                    eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
 
                 # for string attribute
-                STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
-                temps = self.contactStrAnalysis(dataMap[customer][contact], STR_ITEMS)
+                STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq']
+                temps = self.eaccountStrAnalysis(dataMap[customer][eaccount], STR_ITEMS)
                 for i in range(len(STR_ITEMS)):
-                    contactMap[customer][contact][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
+                    eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
 
-            customerMap[customer]['class_focus'] = self.get_focus(customerMap[customer]['class_focus'])
-        self.customerMap = customerMap
-        self.contactMap = contactMap
+        self.eaccountMap = eaccountMap
 
-    def contactNumAnalysis(self, dataMapDict, ITEMS, bins='auto', density=False):
+    def eaccountNumAnalysis(self, dataMapDict, ITEMS, bins='auto', density=False):
         temps = []
         for i in range(len(ITEMS)):
             temps.append([])
@@ -150,7 +142,7 @@ class UsageMap():
         return temps
         pass
 
-    def contactStrAnalysis(self, dataMapDict, ITEMS):
+    def eaccountStrAnalysis(self, dataMapDict, ITEMS):
         temps = []
         for i in range(len(ITEMS)):
             temps.append([])
@@ -194,26 +186,3 @@ class UsageMap():
 
     def timeConvert(self, s):
         return str(int(time.mktime(datetime.datetime.strptime(s, "%d/%m/%Y").timetuple())))
-
-
-    def getCustomerUsage(self, customerseq):
-        if customerseq in self.customerMap:
-            return self.customerMap[customerseq]
-        else:
-            print 'customerseq not exist'
-
-    def getContactUsage(self, customerseq, contactseq):
-        if customerseq in self.contactMap:
-            if contactseq in self.contactMap[customerseq]:
-                return self.contactMap[customerseq][contactseq]
-            else:
-                print 'contactseq not exist'
-        else:
-            print 'customerseq not exist'
-
-
-    def getCustomerMap(self):
-        return self.customerMap
-
-    def getContactMap(self):
-        return self.contactMap
