@@ -9,6 +9,7 @@ import datetime
 from collections import Counter
 from pprint import pprint
 from scipy import stats
+import copy
 def parse(verbose=False):
     colHeads = ['sessionid','cookieid','session_pid','firsttimestamp','firstreferringurl','firstdestinationurl','firstreferraltype','timestamp','referralname','referralurl','referraltype','referralsource','city','state','country','dma','secondleveldomain','browsertype','javascriptversion','language','screenresolution','operatingsystemname','mobilenetwork','mobiledevice','devicetype','eaccountuserseq','eaccountuseremailaddressseq','cmusertrackingkey','contactseq','customerseq','marketingsiteseq','marketingentityseq','label','total_num_pages','total_num_elements','num_product','num_search','num_shop','num_account_center','num_homepage','num_solutions_and_services','num_hubs','num_custom_platinum_pages','num_brands','num_other','num_pdf','num_video','num_other_media_library_digital_assets','total_session_time','first_page_contentcategory','first_page_category','first_page_name','first_page_url','first_page_duration','first_relevant_EDC_viewed','first_relevant_PGM_viewed','first_relevant_Class_viewed','first_relevant_Type_viewed','last_page_contentcategory','last_page_category','last_page_name','last_page_url','web_EDC_list','web_PGM_list','web_Class_list','web_type_list','line_event','session_date_time']
 
@@ -17,7 +18,7 @@ def parse(verbose=False):
     # read, extract, generate and compare
     data  = []
     # with open('liangji_dot_com_500_custD.txt','r') as f:
-    with open('./new_data/full_sample_for_liangji_500D.txt','r') as f:
+    with open('./new_data/full_sample_for_liangji_500D','r') as f:
         count = 0
         for line in f:
             count += 1
@@ -76,8 +77,10 @@ if __name__ == '__main__':
     # obj.customerMap[obj.dataMap.keys()[0]]['class_focus']
     # print np.sum([item[1][0] for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
     pprint(obj.eaccountMap['20330908']['7162605'])
-    with open('dataMap.json', 'w') as f:
-        json.dump(obj.dataMap, f)
+    for key in obj.dataMap['20330908']['7162605']:
+        print key
+        print obj.dataMap['20330908']['7162605'][key]['timestamp']
+
     # for key in obj.contactMap['20330908']['12385906']:
     #     print 'key:', key
     #     print obj.contactMap['20330908']['12385906'][key]
@@ -96,45 +99,60 @@ class UsageMap():
         self.eaccountMap = {}
 
 
-    def getDataMap(self, data, oldMap=None, startDate=None, endDate=None, verbose=False):
-        recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq','contactseq']
+    def getDataMap(self, data, oldMap=None, startTimestamp=None, endTimestamp=None, verbose=False):
+        # recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq','contactseq']
 
         dataMap = {}
         if oldMap != None:
             dataMap = oldMap
-
+        timestampNullCount = 0
         duplicate = []
         for item in data:
             if item['customerseq'] not in dataMap:
                 dataMap[item['customerseq']] = {}
             if item['eaccountuserseq'] not in dataMap[item['customerseq']]:
                 dataMap[item['customerseq']][item['eaccountuserseq']] = {}
-            '''
-            record = {}
-            for key in recordKeys:
-                record[key] = item[key]
-            '''
+
+            # record = {}
+            # for key in recordKeys:
+            #     record[key] = item[key]
+
             record = item
+            if len(item['timestamp']) != 10:
+                # print item['timestamp']
+                # item['timestamp'] = item['sessionid'].split('|')[-1]
+                # print item['timestamp']
+                timestampNullCount += 1
             if item['sessionid'] in dataMap[item['customerseq']][item['eaccountuserseq']]:
                 # print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
                 duplicate.append(item)
             elif item['sessionid'] != '' and item['sessionid'] not in dataMap[item['customerseq']][item['eaccountuserseq']]:
                 # check date
-                if startDate != None:
-                    if timeConvert(record['timestamp']) < startDate:
+                if startTimestamp != None:
+                    if timeConvert(record['timestamp']) < startTimestamp:
                         continue
-                if endDate != None:
-                    if timeConvert(record['timestamp']) > endDate:
+                if endTimestamp != None:
+                    if timeConvert(record['timestamp']) > endTimestamp:
                         continue
                 dataMap[item['customerseq']][item['eaccountuserseq']][item['sessionid']] = record
             else:
                 duplicate.append(item)
         print 'duplicate session count: ', len(duplicate)
+        print 'timestamp Null Count', timestampNullCount
+        print 'new data len:', len(data)
+        print 'dataMap len:', len(dataMap)
         self.dataMap = dataMap
+        with open('dataMap.json', 'w') as f:
+            json.dump(obj.dataMap, f)
 
-    def initUsageMap(self, startDate=None):
+
+    def initUsageMap(self, jsonPath=None, startTimestamp=None, endTimestamp=None):
         # init data structure
         dataMap = self.dataMap
+        if jsonPath != None:
+            with open(jsonPath, 'r') as json_data:
+                dataMap = json.load(json_data)
+
         eaccountMap = {}
         # init eaccountMap
         for customer in dataMap:
@@ -142,51 +160,73 @@ class UsageMap():
             # get eaccount
             for eaccount in dataMap[customer]:
                 eaccountMap[customer][eaccount] = {}
-                eaccountMap[customer][eaccount]['number_session'] = len(dataMap[customer][eaccount])
 
-                for session in dataMap[customer][eaccount]:
-                    record = dataMap[customer][eaccount][session]
+                recordDict = dataMap[customer][eaccount]
+                if startTimestamp != None:
+                    for session in recordDict:
+                        if recordDict[session]['timestamp'] < startTimestamp:
+                            del recordDict[session]
+                if endTimestamp != None:
+                    for session in recordDict:
+                        if recordDict[session]['timestamp'] > endTimestamp:
+                            del recordDict[session]
 
+                eaccountMap[customer][eaccount]['number_session'] = len(recordDict)
                 # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
                 # for numeric attribute
                 NUM_ITEMS = ['label',
                 'total_num_pages',
                 'total_session_time',
                 'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
-                temps = self.eaccountNumAnalysis(dataMap[customer][eaccount], NUM_ITEMS)
+                temps = self.eaccountNumAnalysis(recordDict, NUM_ITEMS)
                 for i in range(len(NUM_ITEMS)):
                     eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
 
                 # for string attribute
-                STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq']
-                temps = self.eaccountStrAnalysis(dataMap[customer][eaccount], STR_ITEMS)
+                STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq', 'operatingsystemname']
+                temps = self.eaccountStrAnalysis(recordDict, STR_ITEMS)
                 for i in range(len(STR_ITEMS)):
                     eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
+                mobileList = ['Mobile','iOS','Android','Phone','Samsung','Nokia','RTM', 'Tizen', 'PlayStation','Symbian','Asha','Firefox','webOS']
+                desktopList = ['Windows','OS X','Linux','Macintosh','SunOS','Media','MeeGo']
+                osCountDict = eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis']
+                mobileCount = 0
+                desktopCount = 0
+                temp = {}
+                for i in range(len(osCountDict['key'])):
+                    if len([s for s in mobileList if s in osCountDict['key'][i]]) > 0:
+                        mobileCount += osCountDict['hist'][i]
+                    elif len([s for s in desktopList if s in osCountDict['key'][i]]) > 0:
+                         desktopCount += osCountDict['hist'][i]
+                temp['key'] = ['mobile', 'desktop', 'other']
+                temp['hist'] = [mobileCount, desktopCount, osCountDict['total'] - mobileCount - desktopCount]
+                temp['percentage'] = [float(mobileCount)/osCountDict['total'], float(desktopCount)/osCountDict['total'], float(temp['hist'][2])/osCountDict['total']]
+                eaccountMap[customer][eaccount]['platform'] = temp
 
         self.eaccountMap = eaccountMap
 
-    def eaccountNumAnalysis(self, dataMapDict, ITEMS, bins='auto', density=False):
+    def eaccountNumAnalysis(self, recordDict, ITEMS, bins='auto', density=False):
         temps = []
         for i in range(len(ITEMS)):
             temps.append([])
-        for session in dataMapDict:
+        for session in recordDict:
             for i in range(len(ITEMS)):
                 ITEM = ITEMS[i]
-                if type(dataMapDict[session][ITEM]) is list:
-                    # temps[i] += (dataMapDict[session][ITEM])
-                    temps[i].append(len(dataMapDict[session][ITEM]))
+                if type(recordDict[session][ITEM]) is list:
+                    # temps[i] += (recordDict[session][ITEM])
+                    temps[i].append(len(recordDict[session][ITEM]))
                 else:
-                    if type(dataMapDict[session][ITEM]) is str:
-                        if len(dataMapDict[session][ITEM]) is 0:
-                            dataMapDict[session][ITEM] = 0
+                    if type(recordDict[session][ITEM]) is str:
+                        if len(recordDict[session][ITEM]) is 0:
+                            recordDict[session][ITEM] = 0
                         try:
-                            dataMapDict[session][ITEM] = float(dataMapDict[session][ITEM])
+                            recordDict[session][ITEM] = float(recordDict[session][ITEM])
                         except Exception as e:
-                            print ITEM, dataMapDict[session][ITEM]
+                            print ITEM, recordDict[session][ITEM]
                             raise
 
-                    temps[i].append(dataMapDict[session][ITEM])
-        # temp = [dataMapDict[session][ITEM] for session in dataMapDict]
+                    temps[i].append(recordDict[session][ITEM])
+        # temp = [recordDict[session][ITEM] for session in recordDict]
 
         for i in range(len(ITEMS)):
             try:
@@ -211,18 +251,18 @@ class UsageMap():
         return temps
         pass
 
-    def eaccountStrAnalysis(self, dataMapDict, ITEMS):
+    def eaccountStrAnalysis(self, recordDict, ITEMS):
         temps = []
         for i in range(len(ITEMS)):
             temps.append([])
-        for session in dataMapDict:
+        for session in recordDict:
             for i in range(len(ITEMS)):
                 ITEM = ITEMS[i]
-                if type(dataMapDict[session][ITEM]) is list:
-                    temps[i] += (dataMapDict[session][ITEM])
+                if type(recordDict[session][ITEM]) is list:
+                    temps[i] += (recordDict[session][ITEM])
                 else:
-                    temps[i].append(dataMapDict[session][ITEM])
-        # temp = [dataMapDict[session][ITEM] for session in dataMapDict]
+                    temps[i].append(recordDict[session][ITEM])
+        # temp = [recordDict[session][ITEM] for session in recordDict]
 
         for i in range(len(ITEMS)):
             try:
