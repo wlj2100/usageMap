@@ -109,12 +109,14 @@ def getDataMap(data, oldMap=None, startTimestamp=None, endTimestamp=None, verbos
         json.dump(dataMap, f)
     return dataMap
 
-def getEaccountMap(jsonPath, dataMap=None, startTimestamp=None, endTimestamp=None):
+def getEaccountMap(jsonPath=None, dataMap=None, startTimestamp=None, endTimestamp=None):
     # init data structure
-    if dataMap is None:
+    if jsonPath is not None:
         with open(jsonPath, 'r') as json_data:
             dataMap = json.load(json_data)
     eaccountMap = {}
+    if dataMap is None:
+        return eaccountMap
     # init eaccountMap
     for customer in dataMap:
         eaccountMap[customer] = {}
@@ -122,92 +124,132 @@ def getEaccountMap(jsonPath, dataMap=None, startTimestamp=None, endTimestamp=Non
         for eaccount in dataMap[customer]:
             eaccountMap[customer][eaccount] = {}
 
-            recordDict = dataMap[customer][eaccount]
+            sessionDict = dataMap[customer][eaccount]
             if startTimestamp != None:
-                for session in recordDict:
-                    if recordDict[session]['timestamp'] < startTimestamp:
-                        del recordDict[session]
+                for session in sessionDict:
+                    if sessionDict[session]['timestamp'] < startTimestamp:
+                        del sessionDict[session]
             if endTimestamp != None:
-                for session in recordDict:
-                    if recordDict[session]['timestamp'] > endTimestamp:
-                        del recordDict[session]
+                for session in sessionDict:
+                    if sessionDict[session]['timestamp'] > endTimestamp:
+                        del sessionDict[session]
 
-            eaccountMap[customer][eaccount]['number_session'] = len(recordDict)
+            eaccountMap[customer][eaccount]['number_session'] = len(sessionDict)
             # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
             # for numeric attribute
             NUM_ITEMS = ['label',
             'total_num_pages',
-            'total_session_time',
             'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
-            temps = eaccountNumAnalysis(recordDict, NUM_ITEMS)
+            temps = eaccountNumAnalysis(sessionDict, NUM_ITEMS)
             for i in range(len(NUM_ITEMS)):
                 eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
 
             # for string attribute
             STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq', 'operatingsystemname']
-            temps = eaccountStrAnalysis(recordDict, STR_ITEMS)
+            temps = eaccountStrAnalysis(sessionDict, STR_ITEMS)
             for i in range(len(STR_ITEMS)):
                 eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
-            mobileList = ['Mobile','iOS','Android','Phone','Samsung','Nokia','RTM', 'Tizen', 'PlayStation','Symbian','Asha','Firefox','webOS']
-            desktopList = ['Windows','OS X','Linux','Macintosh','SunOS','Media','MeeGo']
-            osCountDict = eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis']
-            mobileCount = 0
-            desktopCount = 0
-            temp = {}
-            for i in range(len(osCountDict['key'])):
-                if len([s for s in mobileList if s in osCountDict['key'][i]]) > 0:
-                    mobileCount += osCountDict['hist'][i]
-                elif len([s for s in desktopList if s in osCountDict['key'][i]]) > 0:
-                     desktopCount += osCountDict['hist'][i]
-            temp['key'] = ['mobile', 'desktop', 'other']
-            temp['hist'] = [mobileCount, desktopCount, osCountDict['total'] - mobileCount - desktopCount]
-            temp['percentage'] = [float(mobileCount)/osCountDict['total'], float(desktopCount)/osCountDict['total'], float(temp['hist'][2])/osCountDict['total']]
-            eaccountMap[customer][eaccount]['platform'] = temp
+
+            # platform analysis
+            eaccountMap[customer][eaccount]['platform'] = platformAnalysis(eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis'])
     return eaccountMap
 
-def sessionTimeAnalysis(recordDict):
-    bins = ['0-1min','2-4','5-8','9-20','21-45','46+']
-    counts = [0,0,0,0,0,0]
-    for session in recordDict:
-        minute = recordDict[session]['total_session_time'] / 60
-        if minute < 2:
-            counts[0] += 1
-        elif minute < 5:
-            counts[1] += 1
-        elif minute < 9:
-            counts[2] += 1
-        elif minute < 21:
-            counts[3] += 1
-        elif minute < 46:
-            counts[4] += 1
-        else:
-            counts[5] += 1
-    total = sum(counts)
-    percentage = np.array(counts) / float(total)
+def platformAnalysis(osCountDict):
+    # for platform
+    mobileList = ['Mobile','iOS','Android','Phone','Samsung','Nokia','RTM', 'Tizen', 'PlayStation','Symbian','Asha','Firefox','webOS']
+    desktopList = ['Windows','OS X','Linux','Macintosh','SunOS','Media','MeeGo']
+    mobileCount = 0
+    desktopCount = 0
+    temp = {}
+    for i in range(len(osCountDict['key'])):
+        if len([s for s in mobileList if s in osCountDict['key'][i]]) > 0:
+            mobileCount += osCountDict['hist'][i]
+        elif len([s for s in desktopList if s in osCountDict['key'][i]]) > 0:
+             desktopCount += osCountDict['hist'][i]
+    temp['key'] = ['mobile', 'desktop', 'other']
+    temp['hist'] = [mobileCount, desktopCount, osCountDict['total'] - mobileCount - desktopCount]
+    temp['percentage'] = [float(mobileCount)/osCountDict['total'], float(desktopCount)/osCountDict['total'], float(temp['hist'][2])/osCountDict['total']]
+    temp['total'] = osCountDict['total']
+    return temp
+
+# take a session dictionary and perfom special analysis for fixed bins
+def specialNumericAnalysis(sessionDict):
+    # dict of each feature dict
+    result = {}
+    sessionTimeCounts = [0,0,0,0,0,0]
+    timeOfDayCounts = [0,0,0,0,0,0]
+    for session in sessionDict:
+        sessionTimeHelper(sessionDict[session]['total_session_time'] / 60, sessionTimeCounts)
+        timeOfDayHelper(sessionDict[session]['timestamp'], timeOfDayCounts)
+
+    result['sessionTimeAnalysis'] = sessionTimeAnalysis(sessionTimeCounts)
+    timeOfDayDict = {}
+    timeOfDay
+    result['timeOfDayAnalysis'] = timeOfDayDict
+    return result
     pass
 
-def eaccountNumAnalysis(recordDict, ITEMS, bins='auto', density=False):
+def sessionTimeHelper(minute, count):
+    if minute < 2:
+        count[0] += 1
+    elif minute < 5:
+        count[1] += 1
+    elif minute < 9:
+        count[2] += 1
+    elif minute < 21:
+        count[3] += 1
+    elif minute < 46:
+        count[4] += 1
+    else:
+        count[5] += 1
+
+def sessionTimeAnalysis(sessionTimeCounts):
+    sessionTimeDict = {}
+    sessionTimeDict['edge'] = ['0-1min','2-4','5-8','9-20','21-45','46+']
+    sessionTimeDict['hist'] = sessionTimeCounts
+    sessionTimeDict['total'] = sum(sessionTimeCounts)
+    sessionTimeDict['percentage'] = (np.array(sessionTimeCounts) / float(sessionTimeDict['total'])).tolist()
+# use same timezone right now
+# need to change later
+# stackoverflow.com/questions/16505501/get-timezone-from-city-in-python-django
+
+def timeOfDayHelper(timestamp, count):
+    time = getHourFromTimestampToChicago(timestamp)
+    if time < 8:
+        count[0] += 1
+    elif time < 11:
+        count[1] += 1
+    elif time < 14:
+        count[2] += 1
+    elif time < 17:
+        count[3] += 1
+    elif time < 21:
+        count[4] += 1
+    else:
+        count[5] += 1
+
+def eaccountNumAnalysis(sessionDict, ITEMS, bins='auto', density=False):
     temps = []
     for i in range(len(ITEMS)):
         temps.append([])
-    for session in recordDict:
+    for session in sessionDict:
         for i in range(len(ITEMS)):
             ITEM = ITEMS[i]
-            if type(recordDict[session][ITEM]) is list:
-                # temps[i] += (recordDict[session][ITEM])
-                temps[i].append(len(recordDict[session][ITEM]))
+            if type(sessionDict[session][ITEM]) is list:
+                # temps[i] += (sessionDict[session][ITEM])
+                temps[i].append(len(sessionDict[session][ITEM]))
             else:
-                if type(recordDict[session][ITEM]) is str:
-                    if len(recordDict[session][ITEM]) is 0:
-                        recordDict[session][ITEM] = 0
+                if type(sessionDict[session][ITEM]) is str:
+                    if len(sessionDict[session][ITEM]) is 0:
+                        sessionDict[session][ITEM] = 0
                     try:
-                        recordDict[session][ITEM] = float(recordDict[session][ITEM])
+                        sessionDict[session][ITEM] = float(sessionDict[session][ITEM])
                     except Exception as e:
-                        print ITEM, recordDict[session][ITEM]
+                        print ITEM, sessionDict[session][ITEM]
                         raise
 
-                temps[i].append(recordDict[session][ITEM])
-    # temp = [recordDict[session][ITEM] for session in recordDict]
+                temps[i].append(sessionDict[session][ITEM])
+    # temp = [sessionDict[session][ITEM] for session in sessionDict]
 
     for i in range(len(ITEMS)):
         try:
@@ -231,18 +273,18 @@ def eaccountNumAnalysis(recordDict, ITEMS, bins='auto', density=False):
     # return np.histogram(temp, bin=5)
     return temps
 
-def eaccountStrAnalysis(recordDict, ITEMS):
+def eaccountStrAnalysis(sessionDict, ITEMS):
     temps = []
     for i in range(len(ITEMS)):
         temps.append([])
-    for session in recordDict:
+    for session in sessionDict:
         for i in range(len(ITEMS)):
             ITEM = ITEMS[i]
-            if type(recordDict[session][ITEM]) is list:
-                temps[i] += (recordDict[session][ITEM])
+            if type(sessionDict[session][ITEM]) is list:
+                temps[i] += (sessionDict[session][ITEM])
             else:
-                temps[i].append(recordDict[session][ITEM])
-    # temp = [recordDict[session][ITEM] for session in recordDict]
+                temps[i].append(sessionDict[session][ITEM])
+    # temp = [sessionDict[session][ITEM] for session in sessionDict]
 
     for i in range(len(ITEMS)):
         try:
@@ -277,6 +319,9 @@ def eaccountStrAnalysis(recordDict, ITEMS):
 def timeConvert(s):
     return str(int(time.mktime(datetime.datetime.strptime(s, "%d/%m/%Y").timetuple())))
 
+def getHourFromTimestampToChicago(timestamp):
+    obj = time.gmtime(float(timestamp))
+    return (int(time.strftime("%H", obj)) - 6) % 24
 
 if __name__ == '__main__':
     data = parse()
