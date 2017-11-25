@@ -64,235 +64,239 @@ def parse(verbose=False):
             #     break
     return data
 
+def getDataMap(data, oldMap=None, startTimestamp=None, endTimestamp=None, verbose=False):
+    # recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq','contactseq']
+    dataMap = {}
+    if oldMap != None:
+        dataMap = oldMap
+    timestampNullCount = 0
+    duplicate = []
+    for item in data:
+        if item['customerseq'] not in dataMap:
+            dataMap[item['customerseq']] = {}
+        if item['eaccountuserseq'] not in dataMap[item['customerseq']]:
+            dataMap[item['customerseq']][item['eaccountuserseq']] = {}
+
+        # record = {}
+        # for key in recordKeys:
+        #     record[key] = item[key]
+
+        record = item
+        if len(item['timestamp']) != 10:
+            # print item['timestamp']
+            # item['timestamp'] = item['sessionid'].split('|')[-1]
+            # print item['timestamp']
+            timestampNullCount += 1
+        if item['sessionid'] in dataMap[item['customerseq']][item['eaccountuserseq']]:
+            # print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
+            duplicate.append(item)
+        elif item['sessionid'] != '' and item['sessionid'] not in dataMap[item['customerseq']][item['eaccountuserseq']]:
+            # check date
+            if startTimestamp != None:
+                if timeConvert(record['timestamp']) < startTimestamp:
+                    continue
+            if endTimestamp != None:
+                if timeConvert(record['timestamp']) > endTimestamp:
+                    continue
+            dataMap[item['customerseq']][item['eaccountuserseq']][item['sessionid']] = record
+        else:
+            duplicate.append(item)
+    print 'duplicate session count: ', len(duplicate)
+    print 'timestamp Null Count', timestampNullCount
+    print 'new data len:', len(data)
+    print 'dataMap len:', len(dataMap)
+    with open('dataMap.json', 'w') as f:
+        json.dump(dataMap, f)
+    return dataMap
+
+def getEaccountMap(jsonPath, dataMap=None, startTimestamp=None, endTimestamp=None):
+    # init data structure
+    if dataMap is None:
+        with open(jsonPath, 'r') as json_data:
+            dataMap = json.load(json_data)
+    eaccountMap = {}
+    # init eaccountMap
+    for customer in dataMap:
+        eaccountMap[customer] = {}
+        # get eaccount
+        for eaccount in dataMap[customer]:
+            eaccountMap[customer][eaccount] = {}
+
+            recordDict = dataMap[customer][eaccount]
+            if startTimestamp != None:
+                for session in recordDict:
+                    if recordDict[session]['timestamp'] < startTimestamp:
+                        del recordDict[session]
+            if endTimestamp != None:
+                for session in recordDict:
+                    if recordDict[session]['timestamp'] > endTimestamp:
+                        del recordDict[session]
+
+            eaccountMap[customer][eaccount]['number_session'] = len(recordDict)
+            # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
+            # for numeric attribute
+            NUM_ITEMS = ['label',
+            'total_num_pages',
+            'total_session_time',
+            'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
+            temps = eaccountNumAnalysis(recordDict, NUM_ITEMS)
+            for i in range(len(NUM_ITEMS)):
+                eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
+
+            # for string attribute
+            STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq', 'operatingsystemname']
+            temps = eaccountStrAnalysis(recordDict, STR_ITEMS)
+            for i in range(len(STR_ITEMS)):
+                eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
+            mobileList = ['Mobile','iOS','Android','Phone','Samsung','Nokia','RTM', 'Tizen', 'PlayStation','Symbian','Asha','Firefox','webOS']
+            desktopList = ['Windows','OS X','Linux','Macintosh','SunOS','Media','MeeGo']
+            osCountDict = eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis']
+            mobileCount = 0
+            desktopCount = 0
+            temp = {}
+            for i in range(len(osCountDict['key'])):
+                if len([s for s in mobileList if s in osCountDict['key'][i]]) > 0:
+                    mobileCount += osCountDict['hist'][i]
+                elif len([s for s in desktopList if s in osCountDict['key'][i]]) > 0:
+                     desktopCount += osCountDict['hist'][i]
+            temp['key'] = ['mobile', 'desktop', 'other']
+            temp['hist'] = [mobileCount, desktopCount, osCountDict['total'] - mobileCount - desktopCount]
+            temp['percentage'] = [float(mobileCount)/osCountDict['total'], float(desktopCount)/osCountDict['total'], float(temp['hist'][2])/osCountDict['total']]
+            eaccountMap[customer][eaccount]['platform'] = temp
+    return eaccountMap
+
+def sessionTimeAnalysis(recordDict):
+    bins = ['0-1min','2-4','5-8','9-20','21-45','46+']
+    counts = [0,0,0,0,0,0]
+    for session in recordDict:
+        minute = recordDict[session]['total_session_time'] / 60
+        if minute < 2:
+            counts[0] += 1
+        elif minute < 5:
+            counts[1] += 1
+        elif minute < 9:
+            counts[2] += 1
+        elif minute < 21:
+            counts[3] += 1
+        elif minute < 46:
+            counts[4] += 1
+        else:
+            counts[5] += 1
+    total = sum(counts)
+    percentage = np.array(counts) / float(total)
+    pass
+
+def eaccountNumAnalysis(recordDict, ITEMS, bins='auto', density=False):
+    temps = []
+    for i in range(len(ITEMS)):
+        temps.append([])
+    for session in recordDict:
+        for i in range(len(ITEMS)):
+            ITEM = ITEMS[i]
+            if type(recordDict[session][ITEM]) is list:
+                # temps[i] += (recordDict[session][ITEM])
+                temps[i].append(len(recordDict[session][ITEM]))
+            else:
+                if type(recordDict[session][ITEM]) is str:
+                    if len(recordDict[session][ITEM]) is 0:
+                        recordDict[session][ITEM] = 0
+                    try:
+                        recordDict[session][ITEM] = float(recordDict[session][ITEM])
+                    except Exception as e:
+                        print ITEM, recordDict[session][ITEM]
+                        raise
+
+                temps[i].append(recordDict[session][ITEM])
+    # temp = [recordDict[session][ITEM] for session in recordDict]
+
+    for i in range(len(ITEMS)):
+        try:
+            hist, edges = np.histogram(temps[i], bins=bins, density=density)
+            total = np.sum(hist)
+            percentage = 0
+            if total > 0:
+                percentage = hist.astype(float) / float(total)
+            temps[i] = {
+            'hist': hist.tolist(),
+            'percentage': percentage.tolist(),
+            'edges': edges.tolist(),
+            'total': total,
+            'entropy': stats.entropy(np.array(percentage))
+            }
+        except Exception as e:
+            print ITEMS[i] + ' fails parse'
+            print temps[i]
+            temps[i] = {}
+
+    # return np.histogram(temp, bin=5)
+    return temps
+
+def eaccountStrAnalysis(recordDict, ITEMS):
+    temps = []
+    for i in range(len(ITEMS)):
+        temps.append([])
+    for session in recordDict:
+        for i in range(len(ITEMS)):
+            ITEM = ITEMS[i]
+            if type(recordDict[session][ITEM]) is list:
+                temps[i] += (recordDict[session][ITEM])
+            else:
+                temps[i].append(recordDict[session][ITEM])
+    # temp = [recordDict[session][ITEM] for session in recordDict]
+
+    for i in range(len(ITEMS)):
+        try:
+            temps[i] = Counter(temps[i])
+            total = np.sum(temps[i].values())
+            keys = temps[i].keys()
+            hist = np.array(temps[i].values())
+            percentage = 0
+            # error here
+            if total > 0:
+                percentage = hist.astype(float) / float(total)
+            temps[i] = {
+            'hist': hist.tolist(),
+            'percentage': percentage.tolist(),
+            'key': keys,
+            'total': total,
+            'entropy': stats.entropy(np.array(percentage))
+            }
+        except Exception as e:
+            print ITEMS[i] + ' fails parse'
+            print temps[i]
+            print percentage
+            print hist
+            print total
+            temps[i] = {}
+            raise
+
+    # return np.histogram(temp, bin=5)
+    return temps
+
+
+def timeConvert(s):
+    return str(int(time.mktime(datetime.datetime.strptime(s, "%d/%m/%Y").timetuple())))
 
 
 if __name__ == '__main__':
     data = parse()
-    obj = UsageMap()
-    obj.getDataMap(data)
-    obj.initUsageMap()
-    obj.dataMap.keys()[0]
-    obj.dataMap['20330908'].keys()[0]
-    # obj.getCustomerUsage(obj.dataMap.keys()[0])
-    # obj.customerMap[obj.dataMap.keys()[0]]['class_focus']
-    # print np.sum([item[1][0] for item in obj.customerMap[obj.dataMap.keys()[0]]['class_focus']])
-    pprint(obj.eaccountMap['20330908']['7162605'])
-    for key in obj.dataMap['20330908']['7162605']:
+    dataMap = getDataMap(data)
+    eaccountMap = getEaccountMap('dataMap.json', dataMap)
+    dataMap.keys()[0]
+    dataMap['20330908'].keys()[0]
+    # getCustomerUsage(dataMap.keys()[0])
+    # customerMap[dataMap.keys()[0]]['class_focus']
+    # print np.sum([item[1][0] for item in customerMap[dataMap.keys()[0]]['class_focus']])
+    pprint(eaccountMap['20330908']['7162605'])
+    for key in dataMap['20330908']['7162605']:
         print key
-        print obj.dataMap['20330908']['7162605'][key]['timestamp']
+        print dataMap['20330908']['7162605'][key]['timestamp']
 
-    # for key in obj.contactMap['20330908']['12385906']:
+    # for key in contactMap['20330908']['12385906']:
     #     print 'key:', key
-    #     print obj.contactMap['20330908']['12385906'][key]
+    #     print contactMap['20330908']['12385906'][key]
     #     print ''
-    # type(obj.dataMap['20330908']['12385906'])
-    # obj.contactMap['20330908']['12385906']['label_Analysis']['edges']
-    # obj.dataMap['20330908']['12385906'].keys()
+    # type(dataMap['20330908']['12385906'])
+    # contactMap['20330908']['12385906']['label_Analysis']['edges']
+    # dataMap['20330908']['12385906'].keys()
     pass
-
-
-class UsageMap():
-    """docstring for usageMap."""
-
-    def __init__(self):
-        self.dataMap = {}
-        self.eaccountMap = {}
-
-
-    def getDataMap(self, data, oldMap=None, startTimestamp=None, endTimestamp=None, verbose=False):
-        # recordKeys = ['timestamp','label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','line_events','referralsource','city','state','country','dma','eaccountuserseq','contactseq']
-
-        dataMap = {}
-        if oldMap != None:
-            dataMap = oldMap
-        timestampNullCount = 0
-        duplicate = []
-        for item in data:
-            if item['customerseq'] not in dataMap:
-                dataMap[item['customerseq']] = {}
-            if item['eaccountuserseq'] not in dataMap[item['customerseq']]:
-                dataMap[item['customerseq']][item['eaccountuserseq']] = {}
-
-            # record = {}
-            # for key in recordKeys:
-            #     record[key] = item[key]
-
-            record = item
-            if len(item['timestamp']) != 10:
-                # print item['timestamp']
-                # item['timestamp'] = item['sessionid'].split('|')[-1]
-                # print item['timestamp']
-                timestampNullCount += 1
-            if item['sessionid'] in dataMap[item['customerseq']][item['eaccountuserseq']]:
-                # print 'warning: duplicate session id at %s...' %(item['sessionid'][:10])
-                duplicate.append(item)
-            elif item['sessionid'] != '' and item['sessionid'] not in dataMap[item['customerseq']][item['eaccountuserseq']]:
-                # check date
-                if startTimestamp != None:
-                    if timeConvert(record['timestamp']) < startTimestamp:
-                        continue
-                if endTimestamp != None:
-                    if timeConvert(record['timestamp']) > endTimestamp:
-                        continue
-                dataMap[item['customerseq']][item['eaccountuserseq']][item['sessionid']] = record
-            else:
-                duplicate.append(item)
-        print 'duplicate session count: ', len(duplicate)
-        print 'timestamp Null Count', timestampNullCount
-        print 'new data len:', len(data)
-        print 'dataMap len:', len(dataMap)
-        self.dataMap = dataMap
-        with open('dataMap.json', 'w') as f:
-            json.dump(obj.dataMap, f)
-
-
-    def initUsageMap(self, jsonPath=None, startTimestamp=None, endTimestamp=None):
-        # init data structure
-        dataMap = self.dataMap
-        if jsonPath != None:
-            with open(jsonPath, 'r') as json_data:
-                dataMap = json.load(json_data)
-
-        eaccountMap = {}
-        # init eaccountMap
-        for customer in dataMap:
-            eaccountMap[customer] = {}
-            # get eaccount
-            for eaccount in dataMap[customer]:
-                eaccountMap[customer][eaccount] = {}
-
-                recordDict = dataMap[customer][eaccount]
-                if startTimestamp != None:
-                    for session in recordDict:
-                        if recordDict[session]['timestamp'] < startTimestamp:
-                            del recordDict[session]
-                if endTimestamp != None:
-                    for session in recordDict:
-                        if recordDict[session]['timestamp'] > endTimestamp:
-                            del recordDict[session]
-
-                eaccountMap[customer][eaccount]['number_session'] = len(recordDict)
-                # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
-                # for numeric attribute
-                NUM_ITEMS = ['label',
-                'total_num_pages',
-                'total_session_time',
-                'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
-                temps = self.eaccountNumAnalysis(recordDict, NUM_ITEMS)
-                for i in range(len(NUM_ITEMS)):
-                    eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
-
-                # for string attribute
-                STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq', 'operatingsystemname']
-                temps = self.eaccountStrAnalysis(recordDict, STR_ITEMS)
-                for i in range(len(STR_ITEMS)):
-                    eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
-                mobileList = ['Mobile','iOS','Android','Phone','Samsung','Nokia','RTM', 'Tizen', 'PlayStation','Symbian','Asha','Firefox','webOS']
-                desktopList = ['Windows','OS X','Linux','Macintosh','SunOS','Media','MeeGo']
-                osCountDict = eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis']
-                mobileCount = 0
-                desktopCount = 0
-                temp = {}
-                for i in range(len(osCountDict['key'])):
-                    if len([s for s in mobileList if s in osCountDict['key'][i]]) > 0:
-                        mobileCount += osCountDict['hist'][i]
-                    elif len([s for s in desktopList if s in osCountDict['key'][i]]) > 0:
-                         desktopCount += osCountDict['hist'][i]
-                temp['key'] = ['mobile', 'desktop', 'other']
-                temp['hist'] = [mobileCount, desktopCount, osCountDict['total'] - mobileCount - desktopCount]
-                temp['percentage'] = [float(mobileCount)/osCountDict['total'], float(desktopCount)/osCountDict['total'], float(temp['hist'][2])/osCountDict['total']]
-                eaccountMap[customer][eaccount]['platform'] = temp
-
-        self.eaccountMap = eaccountMap
-
-    def eaccountNumAnalysis(self, recordDict, ITEMS, bins='auto', density=False):
-        temps = []
-        for i in range(len(ITEMS)):
-            temps.append([])
-        for session in recordDict:
-            for i in range(len(ITEMS)):
-                ITEM = ITEMS[i]
-                if type(recordDict[session][ITEM]) is list:
-                    # temps[i] += (recordDict[session][ITEM])
-                    temps[i].append(len(recordDict[session][ITEM]))
-                else:
-                    if type(recordDict[session][ITEM]) is str:
-                        if len(recordDict[session][ITEM]) is 0:
-                            recordDict[session][ITEM] = 0
-                        try:
-                            recordDict[session][ITEM] = float(recordDict[session][ITEM])
-                        except Exception as e:
-                            print ITEM, recordDict[session][ITEM]
-                            raise
-
-                    temps[i].append(recordDict[session][ITEM])
-        # temp = [recordDict[session][ITEM] for session in recordDict]
-
-        for i in range(len(ITEMS)):
-            try:
-                hist, edges = np.histogram(temps[i], bins=bins, density=density)
-                total = np.sum(hist)
-                percentage = 0
-                if total > 0:
-                    percentage = hist.astype(float) / float(total)
-                temps[i] = {
-                'hist': hist,
-                'percentage': percentage,
-                'edges': edges,
-                'total': total,
-                'entropy': stats.entropy(percentage)
-                }
-            except Exception as e:
-                print ITEMS[i] + ' fails parse'
-                print temps[i]
-                temps[i] = {}
-
-        # return np.histogram(temp, bin=5)
-        return temps
-        pass
-
-    def eaccountStrAnalysis(self, recordDict, ITEMS):
-        temps = []
-        for i in range(len(ITEMS)):
-            temps.append([])
-        for session in recordDict:
-            for i in range(len(ITEMS)):
-                ITEM = ITEMS[i]
-                if type(recordDict[session][ITEM]) is list:
-                    temps[i] += (recordDict[session][ITEM])
-                else:
-                    temps[i].append(recordDict[session][ITEM])
-        # temp = [recordDict[session][ITEM] for session in recordDict]
-
-        for i in range(len(ITEMS)):
-            try:
-                temps[i] = Counter(temps[i])
-                total = np.sum(temps[i].values())
-                keys = temps[i].keys()
-                hist = np.array(temps[i].values())
-                percentage = 0
-                # error here
-                if total > 0:
-                    percentage = hist.astype(float) / float(total)
-                temps[i] = {
-                'hist': hist,
-                'percentage': percentage,
-                'key': keys,
-                'total': total,
-                'entropy': stats.entropy(percentage)
-                }
-            except Exception as e:
-                print ITEMS[i] + ' fails parse'
-                print temps[i]
-                print percentage
-                print hist
-                print total
-                temps[i] = {}
-                raise
-
-        # return np.histogram(temp, bin=5)
-        return temps
-        pass
-
-    def timeConvert(self, s):
-        return str(int(time.mktime(datetime.datetime.strptime(s, "%d/%m/%Y").timetuple())))
