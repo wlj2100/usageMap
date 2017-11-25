@@ -137,9 +137,7 @@ def getEaccountMap(jsonPath=None, dataMap=None, startTimestamp=None, endTimestam
             eaccountMap[customer][eaccount]['number_session'] = len(sessionDict)
             # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
             # for numeric attribute
-            NUM_ITEMS = ['label',
-            'total_num_pages',
-            'web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
+            NUM_ITEMS = ['label','web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
             temps = eaccountNumAnalysis(sessionDict, NUM_ITEMS)
             for i in range(len(NUM_ITEMS)):
                 eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
@@ -176,18 +174,41 @@ def platformAnalysis(osCountDict):
 def specialNumericAnalysis(sessionDict):
     # dict of each feature dict
     result = {}
-    sessionTimeCounts = [0,0,0,0,0,0]
-    timeOfDayCounts = [0,0,0,0,0,0]
+    sessionTimeCounts = [0] * 6
+    timeOfDayCounts = [0] * 6
+    numOfPagesCounts = [0] * 6
     for session in sessionDict:
         sessionTimeHelper(sessionDict[session]['total_session_time'] / 60, sessionTimeCounts)
         timeOfDayHelper(sessionDict[session]['timestamp'], timeOfDayCounts)
-
+        numOfPagesHelper(sessionDict[session]['total_num_pages'], numOfPagesCounts)
     result['sessionTimeAnalysis'] = sessionTimeAnalysis(sessionTimeCounts)
-    timeOfDayDict = {}
-    timeOfDay
-    result['timeOfDayAnalysis'] = timeOfDayDict
+    result['timeOfDayAnalysis'] = timeOfDayAnalysis(timeOfDayCounts)
+    result['numOfPagesAnalysis'] = numOfPagesAnalysis(numOfPagesCounts)
     return result
     pass
+
+def numOfPagesHelper(num, count):
+    if num < 2:
+        count[0] += 1
+    elif num < 4:
+        count[1] += 1
+    elif num < 8:
+        count[2] += 1
+    elif num < 16:
+        count[3] += 1
+    elif num < 31:
+        count[4] += 1
+    else:
+        count[5] += 1
+
+def numOfPagesAnalysis(numOfPagesCounts):
+    numOfPagesDict = {}
+    numOfPagesDict['edge'] = ['1','2-3','4-7','8-15','16-30','31+']
+    numOfPagesDict['hist'] = numOfPagesCounts
+    numOfPagesDict['total'] = sum(numOfPagesCounts)
+    numOfPagesDict['percentage'] = (np.array(numOfPagesCounts) / float(numOfPagesDict['total'])).tolist()
+    numOfPagesDict['entropy'] = stats.entropy(np.array(numOfPagesDict['percentage']))
+    return numOfPagesDict
 
 def sessionTimeHelper(minute, count):
     if minute < 2:
@@ -209,9 +230,21 @@ def sessionTimeAnalysis(sessionTimeCounts):
     sessionTimeDict['hist'] = sessionTimeCounts
     sessionTimeDict['total'] = sum(sessionTimeCounts)
     sessionTimeDict['percentage'] = (np.array(sessionTimeCounts) / float(sessionTimeDict['total'])).tolist()
+    sessionTimeDict['entropy'] = stats.entropy(np.array(sessionTimeDict['percentage']))
+    return sessionTimeDict
 # use same timezone right now
 # need to change later
 # stackoverflow.com/questions/16505501/get-timezone-from-city-in-python-django
+
+def timeOfDayAnalysis(timeOfDayCounts):
+    timeOfDayDict = {}
+    timeOfDayDict['edge'] = ['0-7 EM','8-10 M','11-13 L','14-16 A','17-20 E','21-23 N']
+    timeOfDayDict['hist'] = timeOfDayCounts
+    timeOfDayDict['total'] = sum(timeOfDayCounts)
+    timeOfDayDict['percentage'] = (np.array(timeOfDayCounts) / float(timeOfDayDict['total'])).tolist()
+    timeOfDayDict['entropy'] = stats.entropy(np.array(timeOfDayDict['percentage']))
+    return timeOfDayDict
+    pass
 
 def timeOfDayHelper(timestamp, count):
     time = getHourFromTimestampToChicago(timestamp)
