@@ -86,3 +86,13 @@
 # ts = time.gmtime(ts)
 #
 # time.strftime("%H", ts)
+
+
+# a = 1.1
+# len(a)
+#
+# a = u'a'
+# type(a)
+# print type(a) is unicode
+#
+# np.empty(0)

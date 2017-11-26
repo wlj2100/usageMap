@@ -137,20 +137,36 @@ def getEaccountMap(jsonPath=None, dataMap=None, startTimestamp=None, endTimestam
             eaccountMap[customer][eaccount]['number_session'] = len(sessionDict)
             # ITEMS = ['label','total_num_pages','total_session_time','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country']
             # for numeric attribute
-            NUM_ITEMS = ['label','web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
+            NUM_ITEMS = ['web_EDC_list','web_PGM_list','web_type_list','web_Class_list']
             temps = eaccountNumAnalysis(sessionDict, NUM_ITEMS)
             for i in range(len(NUM_ITEMS)):
                 eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
 
             # for string attribute
-            STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq', 'operatingsystemname']
+            STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq']
             temps = eaccountStrAnalysis(sessionDict, STR_ITEMS)
             for i in range(len(STR_ITEMS)):
                 eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
 
             # platform analysis
-            eaccountMap[customer][eaccount]['platform'] = platformAnalysis(eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis'])
+            # eaccountMap[customer][eaccount]['platform'] = platformAnalysis(eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis'])
+
+            # special analysis
+            temps = specialNumericAnalysis(sessionDict)
+            for key in temps:
+                eaccountMap[customer][eaccount][key] = temps[key]
     return eaccountMap
+
+def separatePlatformSession(sessionDict):
+    mobileDict = {}
+    nonMobileDict = {}
+    mobileList = ['Mobile','iOS','Android','Phone','Samsung','Nokia','RTM', 'Tizen', 'PlayStation','Symbian','Asha','Firefox','webOS']
+    for session in sessionDict:
+        if len([s for s in mobileList if s in sessionDict[session]['operatingsystemname']]):
+            mobileDict[session] = sessionDict[session]
+        else:
+            nonMobileDict = sessionDict[session]
+    return mobileDict, nonMobileDict
 
 def platformAnalysis(osCountDict):
     # for platform
@@ -207,7 +223,7 @@ def numOfPagesAnalysis(numOfPagesCounts):
     numOfPagesDict['hist'] = numOfPagesCounts
     numOfPagesDict['total'] = sum(numOfPagesCounts)
     numOfPagesDict['percentage'] = (np.array(numOfPagesCounts) / float(numOfPagesDict['total'])).tolist()
-    numOfPagesDict['entropy'] = stats.entropy(np.array(numOfPagesDict['percentage']))
+    numOfPagesDict['entropy'] = stats.entropy(numOfPagesDict['percentage'])
     return numOfPagesDict
 
 def sessionTimeHelper(minute, count):
@@ -230,8 +246,9 @@ def sessionTimeAnalysis(sessionTimeCounts):
     sessionTimeDict['hist'] = sessionTimeCounts
     sessionTimeDict['total'] = sum(sessionTimeCounts)
     sessionTimeDict['percentage'] = (np.array(sessionTimeCounts) / float(sessionTimeDict['total'])).tolist()
-    sessionTimeDict['entropy'] = stats.entropy(np.array(sessionTimeDict['percentage']))
+    sessionTimeDict['entropy'] = stats.entropy(sessionTimeDict['percentage'])
     return sessionTimeDict
+
 # use same timezone right now
 # need to change later
 # stackoverflow.com/questions/16505501/get-timezone-from-city-in-python-django
@@ -242,9 +259,8 @@ def timeOfDayAnalysis(timeOfDayCounts):
     timeOfDayDict['hist'] = timeOfDayCounts
     timeOfDayDict['total'] = sum(timeOfDayCounts)
     timeOfDayDict['percentage'] = (np.array(timeOfDayCounts) / float(timeOfDayDict['total'])).tolist()
-    timeOfDayDict['entropy'] = stats.entropy(np.array(timeOfDayDict['percentage']))
+    timeOfDayDict['entropy'] = stats.entropy(timeOfDayDict['percentage'])
     return timeOfDayDict
-    pass
 
 def timeOfDayHelper(timestamp, count):
     time = getHourFromTimestampToChicago(timestamp)
@@ -272,7 +288,7 @@ def eaccountNumAnalysis(sessionDict, ITEMS, bins='auto', density=False):
                 # temps[i] += (sessionDict[session][ITEM])
                 temps[i].append(len(sessionDict[session][ITEM]))
             else:
-                if type(sessionDict[session][ITEM]) is str:
+                if type(sessionDict[session][ITEM]) in (str, unicode):
                     if len(sessionDict[session][ITEM]) is 0:
                         sessionDict[session][ITEM] = 0
                     try:
@@ -288,7 +304,7 @@ def eaccountNumAnalysis(sessionDict, ITEMS, bins='auto', density=False):
         try:
             hist, edges = np.histogram(temps[i], bins=bins, density=density)
             total = np.sum(hist)
-            percentage = 0
+            percentage = np.empty(0)
             if total > 0:
                 percentage = hist.astype(float) / float(total)
             temps[i] = {
@@ -302,7 +318,7 @@ def eaccountNumAnalysis(sessionDict, ITEMS, bins='auto', density=False):
             print ITEMS[i] + ' fails parse'
             print temps[i]
             temps[i] = {}
-
+            raise
     # return np.histogram(temp, bin=5)
     return temps
 
@@ -325,7 +341,7 @@ def eaccountStrAnalysis(sessionDict, ITEMS):
             total = np.sum(temps[i].values())
             keys = temps[i].keys()
             hist = np.array(temps[i].values())
-            percentage = 0
+            percentage = np.empty(0)
             # error here
             if total > 0:
                 percentage = hist.astype(float) / float(total)
@@ -339,9 +355,6 @@ def eaccountStrAnalysis(sessionDict, ITEMS):
         except Exception as e:
             print ITEMS[i] + ' fails parse'
             print temps[i]
-            print percentage
-            print hist
-            print total
             temps[i] = {}
             raise
 
