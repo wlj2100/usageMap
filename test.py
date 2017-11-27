@@ -143,18 +143,24 @@ def getEaccountMap(jsonPath=None, dataMap=None, startTimestamp=None, endTimestam
                 eaccountMap[customer][eaccount][NUM_ITEMS[i] + '_Num_Analysis'] = temps[i]
 
             # for string attribute
-            STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq']
+            STR_ITEMS = ['dma','web_EDC_list','web_PGM_list','web_type_list','web_Class_list','referralsource','city','state','country','contactseq','browsertype','operatingsystemname']
             temps = eaccountStrAnalysis(sessionDict, STR_ITEMS)
             for i in range(len(STR_ITEMS)):
                 eaccountMap[customer][eaccount][STR_ITEMS[i] + '_Str_Analysis'] = temps[i]
 
             # platform analysis
-            # eaccountMap[customer][eaccount]['platform'] = platformAnalysis(eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis'])
+            eaccountMap[customer][eaccount]['platform'] = platformAnalysis(eaccountMap[customer][eaccount]['operatingsystemname_Str_Analysis'])
 
             # special analysis
-            temps = specialNumericAnalysis(sessionDict)
+            mobileDict, nonMobileDict = separatePlatformSession(sessionDict)
+            eaccountMap[customer][eaccount]['mobile'] = {}
+            temps = specialNumericAnalysis(mobileDict)
             for key in temps:
-                eaccountMap[customer][eaccount][key] = temps[key]
+                eaccountMap[customer][eaccount]['mobile'][key] = temps[key]
+            eaccountMap[customer][eaccount]['nonMobile'] = {}
+            temps = specialNumericAnalysis(nonMobileDict)
+            for key in temps:
+                eaccountMap[customer][eaccount]['nonMobile'][key] = temps[key]
     return eaccountMap
 
 def separatePlatformSession(sessionDict):
@@ -165,7 +171,7 @@ def separatePlatformSession(sessionDict):
         if len([s for s in mobileList if s in sessionDict[session]['operatingsystemname']]):
             mobileDict[session] = sessionDict[session]
         else:
-            nonMobileDict = sessionDict[session]
+            nonMobileDict[session] = sessionDict[session]
     return mobileDict, nonMobileDict
 
 def platformAnalysis(osCountDict):
@@ -194,7 +200,7 @@ def specialNumericAnalysis(sessionDict):
     timeOfDayCounts = [0] * 6
     numOfPagesCounts = [0] * 6
     for session in sessionDict:
-        sessionTimeHelper(sessionDict[session]['total_session_time'] / 60, sessionTimeCounts)
+        sessionTimeHelper(sessionDict[session]['total_session_time'], sessionTimeCounts)
         timeOfDayHelper(sessionDict[session]['timestamp'], timeOfDayCounts)
         numOfPagesHelper(sessionDict[session]['total_num_pages'], numOfPagesCounts)
     result['sessionTimeAnalysis'] = sessionTimeAnalysis(sessionTimeCounts)
@@ -204,6 +210,7 @@ def specialNumericAnalysis(sessionDict):
     pass
 
 def numOfPagesHelper(num, count):
+    num = int(num)
     if num < 2:
         count[0] += 1
     elif num < 4:
@@ -226,7 +233,13 @@ def numOfPagesAnalysis(numOfPagesCounts):
     numOfPagesDict['entropy'] = stats.entropy(numOfPagesDict['percentage'])
     return numOfPagesDict
 
-def sessionTimeHelper(minute, count):
+def sessionTimeHelper(second, count):
+    try:
+        minute = int(str(second)) / 60
+    except Exception as e:
+        print type(second), second
+        minute = 0
+
     if minute < 2:
         count[0] += 1
     elif minute < 5:
@@ -382,7 +395,8 @@ if __name__ == '__main__':
     for key in dataMap['20330908']['7162605']:
         print key
         print dataMap['20330908']['7162605'][key]['timestamp']
-
+    with open('result.json', 'w') as jsonfile:
+        json.dump(eaccountMap['20330908']['7162605'], jsonfile)
     # for key in contactMap['20330908']['12385906']:
     #     print 'key:', key
     #     print contactMap['20330908']['12385906'][key]
